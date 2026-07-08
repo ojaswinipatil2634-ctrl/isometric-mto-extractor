@@ -10,6 +10,22 @@ Built incrementally across 11 phases (full log in the
 is the evaluator-facing summary: overview, setup, environment variables,
 AI pipeline design, assumptions/limitations, and what's next.
 
+# Screenshots
+
+## Upload Drawing
+
+![Upload](screenshots/image1.png)
+
+## Result
+
+![Result](screenshots/image2.png)
+
+## Generated CSV
+
+![CSV](screenshots/image3.png)
+
+![CSV](screenshots/image4.png)
+
 ## 1. Overview & architecture
 
 ```
