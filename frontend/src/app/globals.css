@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Source Serif 4", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-body: "Inter", ui-sans-serif, sans-serif;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-vellum-50 text-graphite-900 dark:bg-print-900 dark:text-linework;
+}
+
+.drafting-grid {
+  background-image:
+    linear-gradient(rgba(58, 61, 62, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(58, 61, 62, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.dark .drafting-grid {
+  background-image:
+    linear-gradient(rgba(234, 243, 250, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(234, 243, 250, 0.08) 1px, transparent 1px);
+}
+
+:focus-visible {
+  outline: 2px solid theme("colors.blueprint.500");
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

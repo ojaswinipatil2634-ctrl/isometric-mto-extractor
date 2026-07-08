@@ -1,106 +1,73 @@
-"""
-Pydantic schemas defining the structured MTO (Material Take-Off) contract.
+"""Request/response schemas for the Phase 8 /mto endpoints."""
+from datetime import datetime
 
-This is the strict JSON shape we require from Gemini Vision, and also the
-shape the mock pipeline must produce, so that both code paths are
-indistinguishable to the frontend.
-"""
-from __future__ import annotations
+from pydantic import BaseModel, Field
 
-from enum import Enum
-from pydantic import BaseModel, Field, field_validator
+from app.schemas.business_rules import HardwareLineItemSchema, RuleViolationSchema
+from app.schemas.vision_extraction import VisionMTOItem as MTOItemSchema
 
 
-class ComponentType(str, Enum):
-    PIPE = "pipe"
-    ELBOW = "elbow"
-    TEE = "tee"
-    REDUCER = "reducer"
-    FLANGE = "flange"
-    VALVE = "valve"
-    GASKET = "gasket"
-    BOLT_SET = "bolt_set"
-    WELD = "weld"
-    SUPPORT = "support"
-
-
-class DrawingMetadata(BaseModel):
-    drawing_number: str = Field(..., description="Drawing / document number")
-    revision: str = Field(default="A", description="Revision letter/number")
-    line_number: str = Field(default="UNKNOWN", description="Piping line number")
-    material_class: str = Field(default="UNKNOWN", description="Piping material class, e.g. A106-B")
-    service: str = Field(default="UNKNOWN", description="Process service, e.g. Cooling Water")
-    nps: str = Field(default="UNKNOWN", description="Nominal pipe size, e.g. 6\"")
-
-
-class PipeSegment(BaseModel):
-    nps: str
-    length_m: float = Field(ge=0)
-    schedule: str = Field(default="STD")
-
-
-class Fitting(BaseModel):
-    type: ComponentType
-    nps: str
-    quantity: int = Field(ge=0)
-    rating: str | None = Field(default=None, description="Pressure rating, e.g. 150#, if applicable")
-
-    @field_validator("quantity")
-    @classmethod
-    def non_negative(cls, v: int) -> int:
-        if v < 0:
-            raise ValueError("quantity cannot be negative")
-        return v
-
-
-class Weld(BaseModel):
-    weld_type: str = Field(default="Butt Weld")
-    quantity: int = Field(ge=0)
-
-
-class Support(BaseModel):
-    support_type: str = Field(default="Pipe Support")
-    quantity: int = Field(ge=0)
-
-
-class ExtractionRaw(BaseModel):
-    """The raw shape we ask Gemini to return. Deliberately permissive on
-    numeric formatting since vision models are inconsistent about units —
-    normalization happens downstream in the pipeline, not in this schema.
+class SymbolDetectionInfoSchema(BaseModel):
     """
-    metadata: DrawingMetadata
-    pipe_segments: list[PipeSegment] = Field(default_factory=list)
-    fittings: list[Fitting] = Field(default_factory=list)
-    welds: list[Weld] = Field(default_factory=list)
-    supports: list[Support] = Field(default_factory=list)
-    confidence: float = Field(default=0.75, ge=0, le=1)
+    Informational only - never gates whether an MTO/CSV is produced.
+    `enabled=False` just means this run's graph/hardware/violations were
+    built from OCR + pipe geometry alone, because no YOLO weights file
+    was available; the rest of the response is unaffected.
+    """
+
+    enabled: bool
+    reason: str | None = None
 
 
-class MTOLineItem(BaseModel):
-    """A single row in the final Material Take-Off table."""
-    component: str
-    nps: str
-    unit: str  # "m" for pipe, "ea" for count-based items
-    quantity: float
-    rating: str | None = None
-    notes: str | None = None
+class MTOExtractionResponse(BaseModel):
+    id: int
+    status: str = Field(..., examples=["extracted"])
+    filename: str
+    created_at: datetime
+
+    drawing_number: str | None = None
+    revision: str | None = None
+    line_number: str | None = None
+    service: str | None = None
+    material_class: str | None = None
+    nps_values: list[str]
+
+    # Actual MTO line items - the primary deliverable (spec section 3.4).
+    items: list[MTOItemSchema]
+    mto_summary: dict
+    extraction_source: str  # "gemini" | "mock"
+    used_mock: bool
+
+    node_count: int
+    edge_count: int
+    branch_count: int
+    dead_end_count: int
+    loop_count: int
+    is_fully_connected: bool
+
+    hardware: list[HardwareLineItemSchema]
+    violations: list[RuleViolationSchema]
+    duplicate_fitting_count: int
+
+    symbol_detection: SymbolDetectionInfoSchema
+
+    warnings: list[str]
+    processing_time_ms: float
 
 
-class MTOSummary(BaseModel):
-    total_pipe_length_m: float
-    total_fittings: int
-    total_flanged_joints: int
-    total_gaskets: int
-    total_bolt_sets: int
-    total_valves: int
-    total_welds: int
+class MTOHistoryItemSchema(BaseModel):
+    id: int
+    filename: str
+    created_at: datetime
+    drawing_number: str | None = None
+    revision: str | None = None
+    node_count: int
+    hardware_count: int
+    violation_count: int
 
 
-class MTOResult(BaseModel):
-    """The full API response contract returned by POST /api/extract."""
-    metadata: DrawingMetadata
-    line_items: list[MTOLineItem]
-    summary: MTOSummary
-    confidence: float
-    mock_mode: bool
-    warnings: list[str] = Field(default_factory=list)
+class MTOHistoryResponse(BaseModel):
+    items: list[MTOHistoryItemSchema]
+    total_count: int
+    limit: int
+    offset: int

@@ -1,50 +1,56 @@
-"""FastAPI application entrypoint."""
-from __future__ import annotations
+"""
+FastAPI application entrypoint.
 
+Wires together config, logging, error handlers, CORS, and routers.
+Business logic never lives here - this file is only composition.
+"""
 import logging
-
-from contextlib import asynccontextmanager
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import router
-from app.config import get_settings
+from app.core.config import get_settings
+from app.core.database import init_db
+from app.core.errors import register_exception_handlers
+from app.core.logging_config import configure_logging
+from app.api.routes import health, extract, preprocess, ocr, detect, pipes, graph, business_rules, mto, verify
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
+# Ensure runtime directories exist before the app starts serving requests.
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    if settings.mock_mode:
-        logger.warning(
-            "GEMINI_API_KEY not set — starting in MOCK MODE. "
-            "Set GEMINI_API_KEY in .env to enable live extraction."
-        )
-    else:
-        logger.info("Starting with live Gemini Vision extraction (model=%s)", settings.model_name)
-    yield
-
+# Create the SQLite schema (Phase 8) if it doesn't exist yet - safe to
+# call on every startup, this is CREATE TABLE IF NOT EXISTS semantics.
+init_db()
 
 app = FastAPI(
-    title=settings.app_name,
-    description="Extracts a Material Take-Off (MTO) from a piping isometric drawing using Gemini Vision.",
-    version="1.0.0",
-    lifespan=lifespan,
+    title=settings.APP_NAME,
+    version="0.1.0",
+    description="Industrial isometric drawing MTO extraction API.",
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(router, prefix="/api")
+register_exception_handlers(app)
+
+app.include_router(health.router, prefix=settings.API_V1_PREFIX)
+app.include_router(extract.router, prefix=settings.API_V1_PREFIX)
+app.include_router(preprocess.router, prefix=settings.API_V1_PREFIX)
+app.include_router(ocr.router, prefix=settings.API_V1_PREFIX)
+app.include_router(detect.router, prefix=settings.API_V1_PREFIX)
+app.include_router(pipes.router, prefix=settings.API_V1_PREFIX)
+app.include_router(graph.router, prefix=settings.API_V1_PREFIX)
+app.include_router(business_rules.router, prefix=settings.API_V1_PREFIX)
+app.include_router(mto.router, prefix=settings.API_V1_PREFIX)
+app.include_router(verify.router, prefix=settings.API_V1_PREFIX)
